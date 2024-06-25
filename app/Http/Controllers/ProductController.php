@@ -31,6 +31,7 @@ class ProductController extends Controller
     public function fashionProductList(Request $request){
         $page = $request->input('page');
         $limit =$request->input('limit');
+        $typeGroup =$request->input('typeGroup');
         $offset = ($page -1)*$limit;
 
         $products = Product::select('products.*','product_types.prd_type_name','product_types.prd_type_brand',
@@ -39,9 +40,9 @@ class ProductController extends Controller
             ->leftJoin('product_types','product_types.prd_type_id','=','products.prd_type')
             ->leftJoin('product_types','product_types.prd_type_id','=','products.prd_type')
             ->leftJoin('brands','brands.brand_id','=','product_types.prd_type_brand')
-            ->where('prd_type_name', '=', "polo shirt")
-            ->orwhere('prd_type_name', '=', "No neck T-shirt")
-            ->orwhere('prd_type_name', '=', "Clothing fashion")
+//            ->where('prd_type_name', '=', "polo shirt")
+//            ->orwhere('prd_type_name', '=', "No neck T-shirt")
+//            ->orwhere('prd_type_name', '=', "Clothing fashion")
             ->groupBy('products.prd_id')
             ->groupBy('product_types.prd_type_name')
             ->orderBy('prd_id','asc')
@@ -98,16 +99,52 @@ class ProductController extends Controller
         $page = $request->input('page');
         $limit =$request->input('limit');
         $offset = ($page -1)*$limit;
+        $typeGroup =$request->input('typeGroup');
+        $brands =$request->input('brands');
+        $prdType = $request->input('prdType');
+        $prdPrice = $request->input('prdPrice');
+        $where_raw ='';
+        if($typeGroup !=''){
+            $where_raw ="prd_type_group = '{$typeGroup}'";
+        }else{
+            $where_raw ="prd_type_group = 'Fashion'";
+        }
 
-        $products = Product::select('products.*','product_types.prd_type_name')
+        if(isset($brands)){
+            if(count($brands) > 0){
+                $array = implode("','",$brands);
+                $where_raw .=" AND brands.brand_name in ('".$array."')";
+            }
+        }
+        //print_r($prdType); die();
+        if(isset($prdType)){
+            if(count($prdType) > 0){
+                $array = implode("','",$prdType);
+                $where_raw .=" AND product_types.prd_type_name in ('".$array."')";
+            }
+        }
+
+        if(isset($prdPrice)){
+            if(count($prdPrice) > 0){
+               // $where_raw .="AND ((prod_attr @? '$.prd_size_m ? (@ > 5)')";
+            }
+        }
+
+        $products = Product::select('products.*','product_types.prd_type_name','brands.brand_name')
             ->leftJoin('product_types','product_types.prd_type_id','=','products.prd_type')
+            ->leftJoin('brands','brands.brand_id','=','product_types.prd_type_brand')
+//            ->whereRaw($where_raw)->toSql();
+//               print_r($products); die();
+            ->whereRaw($where_raw)
             ->orderBy('prd_id','asc')
             ->offset($offset)->limit($limit)->get();
+
         $rowCount = Product::select('products.*','product_types.prd_type_name')
             ->leftJoin('product_types','product_types.prd_type_id','=','products.prd_type')
+            ->leftJoin('brands','brands.brand_id','=','product_types.prd_type_brand')
+            ->whereRaw($where_raw)
             ->count();
-        //$products =$query->limit($limit)->offset($offset)->get();
-        // $rowCount = $query->count();
+
         $last_page=0;
         if($rowCount >0 && $limit>0){
             $remains =  ($rowCount%$limit >0)? 1:0;
@@ -228,14 +265,16 @@ class ProductController extends Controller
                 }
             }
         }
-        // print_r($data);
-        // die();
+
         if($prod_id !=''){
             Product::where('prd_id', $prod_id)->update($data);
             return response()->json(['message' => 'Update successfully'], 201);
         }else{
-            $newProd = Product::insert($data);
-            if($newProd->prd_id){
+           // $newProd = Product::insert($data);
+            $myModel = new Product($data);
+            $myModel->save();
+
+            if(!empty($myModel->prd_id)){
                 return response()->json(['message' => 'Product added successfully'], 201);
             }else{
                 return response()->json(['message' => 'Problem happen'], 201);
